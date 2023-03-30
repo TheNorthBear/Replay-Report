@@ -1,0 +1,601 @@
+/*     */ package de.doriansnowball.maker.objects;
+/*     */ 
+/*     */ import de.doriansnowball.maker.CustomGenerator;
+/*     */ import de.doriansnowball.maker.Main;
+/*     */ import de.doriansnowball.maker.enums.Endmodus;
+/*     */ import de.doriansnowball.maker.enums.Mapsize;
+/*     */ import de.doriansnowball.maker.enums.Orttype;
+/*     */ import de.doriansnowball.maker.enums.Team;
+/*     */ import de.doriansnowball.maker.enums.Voidmodus;
+/*     */ import de.doriansnowball.maker.enums.Waterstate;
+/*     */ import java.io.File;
+/*     */ import java.io.IOException;
+/*     */ import java.util.ArrayList;
+/*     */ import java.util.HashMap;
+/*     */ import java.util.Iterator;
+/*     */ import java.util.List;
+/*     */ import java.util.UUID;
+/*     */ import org.apache.commons.io.FileUtils;
+/*     */ import org.bukkit.Bukkit;
+/*     */ import org.bukkit.Difficulty;
+/*     */ import org.bukkit.Location;
+/*     */ import org.bukkit.Material;
+/*     */ import org.bukkit.OfflinePlayer;
+/*     */ import org.bukkit.World;
+/*     */ import org.bukkit.WorldCreator;
+/*     */ import org.bukkit.block.Biome;
+/*     */ import org.bukkit.configuration.file.YamlConfiguration;
+/*     */ import org.bukkit.event.Listener;
+/*     */ import org.bukkit.generator.ChunkGenerator;
+/*     */ import org.bukkit.inventory.ItemStack;
+/*     */ import org.bukkit.plugin.Plugin;
+/*     */ import org.bukkit.scheduler.BukkitTask;
+/*     */ 
+/*     */ 
+/*     */ public class Map
+/*     */   implements Listener
+/*     */ {
+/*     */   private OfflinePlayer besitzer;
+/*     */   private String name;
+/*     */   private String beschreibung;
+/*     */   private boolean aktiv;
+/*     */   private int iconid;
+/*     */   private Mapsize size;
+/*     */   private int minPlayers;
+/*     */   private int maxPlayers;
+/*     */   private ArrayList<Ort> orte;
+/*     */   private ArrayList<Team> teams;
+/*     */   private Endmodus modus;
+/*     */   private Voidmodus voidmodus;
+/*     */   private Waterstate waterstate;
+/*     */   private boolean pvp;
+/*     */   private boolean dropItems;
+/*     */   private boolean hunger;
+/*     */   private boolean bauen;
+/*     */   private boolean pickup;
+/*     */   private boolean keepinv;
+/*     */   private boolean tnt;
+/*     */   private int zeit;
+/*     */   private int placedTnT;
+/*     */   private ItemStack[] spawnItems;
+/*     */   private double bewertung;
+/*  62 */   private HashMap<UUID, Double> bewertungen = new HashMap<>();
+/*     */   private Difficulty schwierigkeit;
+/*     */   private World welt;
+/*     */   private ItemStack sammeln;
+/*     */   private int mapid;
+/*     */   private YamlConfiguration config;
+/*     */   private Main main;
+/*     */   private BukkitTask task;
+/*     */   private Integer respawns;
+/*     */   
+/*     */   public Map(int id, String name, OfflinePlayer besitzer, Mapsize size, boolean aktiv, Main main) {
+/*  73 */     this.main = main;
+/*  74 */     this.mapid = id;
+/*  75 */     this.besitzer = besitzer;
+/*  76 */     this.size = size;
+/*  77 */     this.name = name;
+/*  78 */     setAktiv(aktiv);
+/*  79 */     if (exist()) {
+/*  80 */       load();
+/*     */     } else {
+/*  82 */       initNew(besitzer, size);
+/*  83 */       save();
+/*     */     } 
+/*     */   }
+/*     */ 
+/*     */   
+/*     */   public void save() {
+/*  89 */     File f = new File(this.main.getDataFolder().getAbsolutePath() + "/map_" + this.mapid + ".yml");
+/*  90 */     YamlConfiguration config = new YamlConfiguration();
+/*     */     
+/*  92 */     config.set("beschreibung", this.beschreibung);
+/*  93 */     config.set("besitzer", this.besitzer.getUniqueId().toString());
+/*  94 */     config.set("iconid", Integer.valueOf(this.iconid));
+/*  95 */     config.set("minPlayers", Integer.valueOf(this.minPlayers));
+/*  96 */     config.set("maxPlayers", Integer.valueOf(this.maxPlayers));
+/*  97 */     config.set("mapsize", this.size.toString());
+/*  98 */     config.set("orte", this.orte);
+/*  99 */     ArrayList<String> teamss = new ArrayList<>();
+/* 100 */     for (Team t : this.teams) {
+/* 101 */       teamss.add(t.toString());
+/*     */     }
+/* 103 */     config.set("teams", teamss);
+/* 104 */     config.set("endmodus", this.modus.toString());
+/* 105 */     config.set("voidmodus", this.voidmodus.toString());
+/* 106 */     config.set("schwierigkeit", this.schwierigkeit.toString());
+/* 107 */     config.set("waterstate", this.waterstate.toString());
+/* 108 */     config.set("pvp", Boolean.valueOf(this.pvp));
+/* 109 */     config.set("dropItems", Boolean.valueOf(this.dropItems));
+/* 110 */     config.set("hunger", Boolean.valueOf(this.hunger));
+/* 111 */     config.set("bauen", Boolean.valueOf(this.bauen));
+/* 112 */     config.set("pickUpItems", Boolean.valueOf(this.pickup));
+/* 113 */     config.set("keepInventory", Boolean.valueOf(this.keepinv));
+/* 114 */     config.set("tnt", Boolean.valueOf(this.tnt));
+/* 115 */     config.set("respawns", this.respawns);
+/* 116 */     config.set("zeit", Integer.valueOf(this.zeit));
+/* 117 */     HashMap<String, Double> temp = new HashMap<>();
+/* 118 */     for (java.util.Map.Entry<UUID, Double> e : this.bewertungen.entrySet()) {
+/* 119 */       temp.put(((UUID)e.getKey()).toString(), e.getValue());
+/*     */     }
+/* 121 */     config.set("bewertungen", temp);
+/* 122 */     config.set("Ziel.Sammeln", this.sammeln);
+/* 123 */     config.set("spawnItems", this.spawnItems);
+/* 124 */     config.set("placedtnt", Integer.valueOf(this.placedTnT));
+/*     */     try {
+/* 126 */       config.save(f);
+/* 127 */     } catch (IOException e) {
+/* 128 */       e.printStackTrace();
+/*     */     } 
+/*     */   }
+/*     */ 
+/*     */   
+/*     */   private void initNew(OfflinePlayer besitzer, Mapsize size) {
+/* 134 */     WorldCreator wc = new WorldCreator("map_" + this.mapid);
+/* 135 */     wc.environment(World.Environment.NORMAL);
+/* 136 */     wc.generateStructures(false);
+/* 137 */     wc.generator((ChunkGenerator)new CustomGenerator());
+/* 138 */     final World w = wc.createWorld();
+/* 139 */     w.setSpawnLocation(0, 67, 0);
+/* 140 */     w.getWorldBorder().setCenter(w.getSpawnLocation());
+/* 141 */     w.getWorldBorder().setWarningDistance(0);
+/* 142 */     w.getWorldBorder().setSize(size.getSize());
+/* 143 */     w.setGameRuleValue("commandBlockOutput", "false");
+/* 144 */     final int i = size.getSize();
+/* 145 */     this.task = Bukkit.getScheduler().runTaskTimer((Plugin)this.main, new Runnable() {
+/* 146 */           int x = -(i / 2);
+/*     */ 
+/*     */           
+/*     */           public void run() {
+/* 150 */             for (int Z = -(i / 2); Z < i / 2; Z++) {
+/* 151 */               w.setBiome(this.x, Z, Biome.PLAINS);
+/* 152 */               w.getBlockAt(this.x, 64, Z).setType(Material.GRASS);
+/* 153 */               w.getBlockAt(this.x, 63, Z).setType(Material.DIRT);
+/* 154 */               w.getBlockAt(this.x, 62, Z).setType(Material.DIRT);
+/* 155 */               w.getBlockAt(this.x, 61, Z).setType(Material.BEDROCK);
+/*     */             } 
+/* 157 */             if (this.x < i / 2 - 1) {
+/* 158 */               this.x++;
+/*     */             } else {
+/* 160 */               Map.this.task.cancel();
+/*     */             } 
+/*     */           }
+/*     */         }0L, 2L);
+/*     */ 
+/*     */     
+/* 166 */     w.getWorldBorder().setDamageAmount(0.0D);
+/* 167 */     this.name = this.mapid + "";
+/* 168 */     this.beschreibung = "";
+/* 169 */     this.besitzer = besitzer;
+/* 170 */     this.iconid = 0;
+/* 171 */     this.minPlayers = 2;
+/* 172 */     this.maxPlayers = 8;
+/* 173 */     this.orte = new ArrayList<>();
+/* 174 */     this.orte.add(new Ort(w.getSpawnLocation(), Orttype.SPAWN));
+/* 175 */     this.teams = new ArrayList<>();
+/* 176 */     this.pvp = true;
+/* 177 */     this.modus = Endmodus.LAST_MAN_STANDING;
+/* 178 */     this.voidmodus = Voidmodus.TOD;
+/* 179 */     this.schwierigkeit = Difficulty.PEACEFUL;
+/* 180 */     this.waterstate = Waterstate.NORMAL;
+/* 181 */     this.dropItems = true;
+/* 182 */     this.hunger = true;
+/* 183 */     this.bauen = false;
+/* 184 */     this.tnt = false;
+/* 185 */     this.keepinv = false;
+/* 186 */     this.pickup = true;
+/* 187 */     this.zeit = 10;
+/* 188 */     this.spawnItems = new ItemStack[41];
+/* 189 */     this.respawns = Integer.valueOf(0);
+/* 190 */     this.bewertungen = new HashMap<>();
+/* 191 */     this.bewertung = 0.0D;
+/* 192 */     this.placedTnT = 0;
+/* 193 */     this.sammeln = new ItemStack(Material.AIR);
+/*     */   }
+/*     */ 
+/*     */ 
+/*     */   
+/*     */   private void load() {
+/* 199 */     if (this.config != null) {
+/* 200 */       this.beschreibung = this.config.getString("beschreibung");
+/* 201 */       this.besitzer = Bukkit.getOfflinePlayer(UUID.fromString(this.config.getString("besitzer")));
+/*     */       
+/* 203 */       this.iconid = this.config.getInt("iconid");
+/* 204 */       this.maxPlayers = this.config.getInt("maxPlayers");
+/* 205 */       this.minPlayers = this.config.getInt("minPlayers");
+/* 206 */       this.size = Mapsize.valueOf(this.config.getString("mapsize"));
+/* 207 */       ArrayList<Team> teams = new ArrayList<>();
+/* 208 */       List<String> ls = this.config.getList("teams");
+/* 209 */       if (ls != null) {
+/* 210 */         for (String s : ls) {
+/* 211 */           teams.add(Team.valueOf(s));
+/*     */         }
+/*     */       }
+/* 214 */       this.teams = teams;
+/* 215 */       this.orte = (ArrayList<Ort>)this.config.getList("orte");
+/* 216 */       this.pvp = this.config.getBoolean("pvp");
+/*     */       try {
+/* 218 */         this.modus = Endmodus.valueOf(this.config.getString("endmodus"));
+/* 219 */       } catch (NullPointerException ex) {
+/* 220 */         this.modus = Endmodus.LAST_MAN_STANDING;
+/*     */       } 
+/*     */       try {
+/* 223 */         this.voidmodus = Voidmodus.valueOf(this.config.getString("voidmodus"));
+/* 224 */       } catch (NullPointerException ex) {
+/* 225 */         this.voidmodus = Voidmodus.TOD;
+/*     */       } 
+/*     */       try {
+/* 228 */         this.schwierigkeit = Difficulty.valueOf(this.config.getString("schwierigkeit"));
+/* 229 */       } catch (NullPointerException ex) {
+/* 230 */         this.schwierigkeit = Difficulty.PEACEFUL;
+/*     */       } 
+/*     */       try {
+/* 233 */         this.waterstate = Waterstate.valueOf(this.config.getString("waterstate"));
+/* 234 */       } catch (NullPointerException ex) {
+/* 235 */         this.waterstate = Waterstate.NORMAL;
+/*     */       } 
+/* 237 */       this.dropItems = this.config.getBoolean("dropItems");
+/* 238 */       this.hunger = this.config.getBoolean("hunger");
+/* 239 */       this.bauen = this.config.getBoolean("bauen");
+/* 240 */       this.pickup = this.config.getBoolean("pickUpItems");
+/* 241 */       this.keepinv = this.config.getBoolean("keepInventory");
+/* 242 */       this.tnt = this.config.getBoolean("tnt");
+/* 243 */       this.zeit = this.config.getInt("zeit");
+/* 244 */       this.placedTnT = this.config.getInt("placedtnt");
+/* 245 */       ArrayList<ItemStack> content = (ArrayList<ItemStack>)this.config.getList("spawnItems");
+/* 246 */       ItemStack[] items = new ItemStack[content.size()];
+/* 247 */       for (int i = 0; i < content.size(); i++) {
+/* 248 */         ItemStack item = content.get(i);
+/* 249 */         if (item != null) {
+/* 250 */           items[i] = item;
+/*     */         } else {
+/* 252 */           items[i] = null;
+/*     */         } 
+/*     */       } 
+/* 255 */       this.spawnItems = items;
+/* 256 */       this.respawns = Integer.valueOf(this.config.getInt("respawns"));
+/* 257 */       HashMap<String, Double> temp = new HashMap<>();
+/*     */       
+/* 259 */       if (this.config.getConfigurationSection("bewertungen") == null)
+/* 260 */         this.config.createSection("bewertungen"); 
+/* 261 */       for (String s : this.config.getConfigurationSection("bewertungen").getKeys(false)) {
+/* 262 */         temp.put(s, Double.valueOf(this.config.getConfigurationSection("bewertungen").getDouble(s)));
+/* 263 */         for (java.util.Map.Entry<String, Double> e : temp.entrySet()) {
+/* 264 */           this.bewertungen.put(UUID.fromString(e.getKey()), e.getValue());
+/*     */         }
+/*     */       } 
+/* 267 */       if (this.bewertungen.size() >= 1) {
+/* 268 */         double d = 0.0D;
+/* 269 */         for (Iterator<Double> iterator = this.bewertungen.values().iterator(); iterator.hasNext(); ) { double b = ((Double)iterator.next()).doubleValue();
+/* 270 */           d += b; }
+/* 271 */          this.bewertung = d / this.bewertungen.size();
+/*     */       } else {
+/* 273 */         this.bewertung = 0.0D;
+/*     */       } 
+/*     */       
+/* 276 */       this.sammeln = this.config.getItemStack("Ziel.Sammeln");
+/*     */     } 
+/*     */   }
+/*     */ 
+/*     */   
+/*     */   public void delete() {
+/* 282 */     File f = new File(this.main.getDataFolder().getAbsolutePath() + "/map_" + this.mapid + ".yml");
+/* 283 */     File world = new File(Bukkit.getWorldContainer().getAbsolutePath() + "/map_" + getMapid() + "/");
+/*     */     try {
+/* 285 */       FileUtils.forceDeleteOnExit(f);
+/* 286 */       FileUtils.forceDeleteOnExit(world);
+/* 287 */     } catch (IOException e) {
+/* 288 */       e.printStackTrace();
+/*     */     } 
+/* 290 */     Bukkit.unloadWorld(this.welt, false);
+/*     */   }
+/*     */   
+/*     */   public World loadWorld() {
+/* 294 */     World w = Bukkit.createWorld(new WorldCreator("map_" + this.mapid));
+/* 295 */     this.welt = w;
+/* 296 */     for (Ort o : this.orte)
+/* 297 */       o.decode(w); 
+/* 298 */     return w;
+/*     */   }
+/*     */   
+/*     */   private boolean exist() {
+/* 302 */     File f = new File(this.main.getDataFolder().getAbsolutePath() + "/map_" + this.mapid + ".yml");
+/* 303 */     if (f.exists()) {
+/* 304 */       YamlConfiguration config = new YamlConfiguration();
+/*     */       try {
+/* 306 */         config.load(f);
+/* 307 */         this.config = config;
+/* 308 */         return true;
+/* 309 */       } catch (IOException|org.bukkit.configuration.InvalidConfigurationException e) {
+/* 310 */         e.printStackTrace();
+/* 311 */         return false;
+/*     */       } 
+/*     */     } 
+/* 314 */     return false;
+/*     */   }
+/*     */   
+/*     */   public Location getOrtLocation(Orttype type) {
+/* 318 */     Location loc = new Location(getWelt(), 0.0D, (getWelt().getHighestBlockYAt(0, 0) + 3), 0.0D);
+/* 319 */     for (Ort o : getOrte()) {
+/* 320 */       if (o.getType() == type) {
+/* 321 */         loc = o.getLocation();
+/*     */       }
+/*     */     } 
+/* 324 */     return loc;
+/*     */   }
+/*     */   
+/*     */   public void addBewertung(UUID uuid, double d) {
+/* 328 */     this.bewertungen.put(uuid, Double.valueOf(d));
+/* 329 */     if (this.bewertungen.size() >= 1) {
+/* 330 */       double d1 = 0.0D;
+/* 331 */       for (Iterator<Double> iterator = this.bewertungen.values().iterator(); iterator.hasNext(); ) { double b = ((Double)iterator.next()).doubleValue();
+/* 332 */         d1 += b; }
+/* 333 */        this.bewertung = d1 / this.bewertungen.size();
+/*     */     } else {
+/* 335 */       this.bewertung = 0.0D;
+/*     */     } 
+/* 337 */     save();
+/*     */   }
+/*     */   
+/*     */   public void addBewertung(UUID uuid, int i) {
+/* 341 */     addBewertung(uuid, i);
+/*     */   }
+/*     */   
+/*     */   public OfflinePlayer getBesitzer() {
+/* 345 */     return this.besitzer;
+/*     */   }
+/*     */   
+/*     */   public void setBesitzer(OfflinePlayer besitzer) {
+/* 349 */     this.besitzer = besitzer;
+/*     */   }
+/*     */   
+/*     */   public int getIconid() {
+/* 353 */     return this.iconid;
+/*     */   }
+/*     */   
+/*     */   public void setIconid(int iconid) {
+/* 357 */     this.iconid = iconid;
+/*     */   }
+/*     */   
+/*     */   public Mapsize getSize() {
+/* 361 */     return this.size;
+/*     */   }
+/*     */   
+/*     */   public void setSize(Mapsize size) {
+/* 365 */     this.size = size;
+/*     */   }
+/*     */   
+/*     */   public int getMinPlayers() {
+/* 369 */     return this.minPlayers;
+/*     */   }
+/*     */   
+/*     */   public void setMinPlayers(int minPlayers) {
+/* 373 */     this.minPlayers = minPlayers;
+/*     */   }
+/*     */   
+/*     */   public int getMaxPlayers() {
+/* 377 */     return this.maxPlayers;
+/*     */   }
+/*     */   
+/*     */   public void setMaxPlayers(int maxPlayers) {
+/* 381 */     this.maxPlayers = maxPlayers;
+/*     */   }
+/*     */   
+/*     */   public ArrayList<Ort> getOrte() {
+/* 385 */     return this.orte;
+/*     */   }
+/*     */   
+/*     */   public void setOrte(ArrayList<Ort> orte) {
+/* 389 */     this.orte = orte;
+/*     */   }
+/*     */   
+/*     */   public ArrayList<Team> getTeams() {
+/* 393 */     return this.teams;
+/*     */   }
+/*     */   
+/*     */   public void setTeams(ArrayList<Team> teams) {
+/* 397 */     this.teams = teams;
+/*     */   }
+/*     */   
+/*     */   public boolean isPvp() {
+/* 401 */     return this.pvp;
+/*     */   }
+/*     */   
+/*     */   public void setPvp(boolean pvp) {
+/* 405 */     this.pvp = pvp;
+/*     */   }
+/*     */   
+/*     */   public Endmodus getModus() {
+/* 409 */     return this.modus;
+/*     */   }
+/*     */   
+/*     */   public void setModus(Endmodus modus) {
+/* 413 */     this.modus = modus;
+/*     */   }
+/*     */   
+/*     */   public Voidmodus getVoidmodus() {
+/* 417 */     return this.voidmodus;
+/*     */   }
+/*     */   
+/*     */   public void setVoidmodus(Voidmodus voidmodus) {
+/* 421 */     this.voidmodus = voidmodus;
+/*     */   }
+/*     */   
+/*     */   public boolean isDropItems() {
+/* 425 */     return this.dropItems;
+/*     */   }
+/*     */   
+/*     */   public void setDropItems(boolean dropItems) {
+/* 429 */     this.dropItems = dropItems;
+/*     */   }
+/*     */   
+/*     */   public boolean isHunger() {
+/* 433 */     return this.hunger;
+/*     */   }
+/*     */   
+/*     */   public void setHunger(boolean hunger) {
+/* 437 */     this.hunger = hunger;
+/*     */   }
+/*     */   
+/*     */   public boolean isBauen() {
+/* 441 */     return this.bauen;
+/*     */   }
+/*     */   
+/*     */   public void setBauen(boolean bauen) {
+/* 445 */     this.bauen = bauen;
+/*     */   }
+/*     */   
+/*     */   public int getZeit() {
+/* 449 */     return this.zeit;
+/*     */   }
+/*     */   
+/*     */   public void setZeit(int zeit) {
+/* 453 */     this.zeit = zeit;
+/*     */   }
+/*     */   
+/*     */   public ItemStack[] getSpawnItems() {
+/* 457 */     return this.spawnItems;
+/*     */   }
+/*     */   
+/*     */   public void setSpawnItems(ItemStack[] spawnItems) {
+/* 461 */     this.spawnItems = spawnItems;
+/*     */   }
+/*     */   
+/*     */   public double getBewertung() {
+/* 465 */     return this.bewertung;
+/*     */   }
+/*     */   
+/*     */   public void setBewertung(double bewertung) {
+/* 469 */     this.bewertung = bewertung;
+/*     */   }
+/*     */   
+/*     */   public int getMapid() {
+/* 473 */     return this.mapid;
+/*     */   }
+/*     */   
+/*     */   public void setMapid(int mapid) {
+/* 477 */     this.mapid = mapid;
+/*     */   }
+/*     */   
+/*     */   public Difficulty getSchwierigkeit() {
+/* 481 */     return this.schwierigkeit;
+/*     */   }
+/*     */   
+/*     */   public void setSchwierigkeit(Difficulty schwierigkeit) {
+/* 485 */     this.schwierigkeit = schwierigkeit;
+/*     */   }
+/*     */   
+/*     */   public World getWelt() {
+/* 489 */     return this.welt;
+/*     */   }
+/*     */   
+/*     */   public void setWelt(World welt) {
+/* 493 */     this.welt = welt;
+/*     */   }
+/*     */   
+/*     */   public ItemStack getSammeln() {
+/* 497 */     return this.sammeln;
+/*     */   }
+/*     */   
+/*     */   public void setSammeln(ItemStack sammeln) {
+/* 501 */     this.sammeln = sammeln;
+/*     */   }
+/*     */   
+/*     */   public String getName() {
+/* 505 */     return this.name;
+/*     */   }
+/*     */   
+/*     */   public void setName(String name) {
+/* 509 */     this.main.mm.setName(getMapid(), name);
+/* 510 */     this.name = name;
+/*     */   }
+/*     */   
+/*     */   public boolean isAktiv() {
+/* 514 */     return this.aktiv;
+/*     */   }
+/*     */   
+/*     */   public void setAktiv(boolean aktiv) {
+/* 518 */     this.aktiv = aktiv;
+/*     */   }
+/*     */   
+/*     */   public Integer getRespawns() {
+/* 522 */     return this.respawns;
+/*     */   }
+/*     */   
+/*     */   public void setRespawns(int i) {
+/* 526 */     this.respawns = Integer.valueOf(i);
+/*     */   }
+/*     */   
+/*     */   public String getBeschreibung() {
+/* 530 */     return this.beschreibung;
+/*     */   }
+/*     */   
+/*     */   public void setBeschreibung(String beschreibung) {
+/* 534 */     this.beschreibung = beschreibung;
+/*     */   }
+/*     */   
+/*     */   public boolean isPickup() {
+/* 538 */     return this.pickup;
+/*     */   }
+/*     */   
+/*     */   public void setPickup(boolean pickup) {
+/* 542 */     this.pickup = pickup;
+/*     */   }
+/*     */   
+/*     */   public boolean isKeepinv() {
+/* 546 */     return this.keepinv;
+/*     */   }
+/*     */   
+/*     */   public void setKeepinv(boolean keepinv) {
+/* 550 */     this.keepinv = keepinv;
+/*     */   }
+/*     */   
+/*     */   public boolean isTnt() {
+/* 554 */     return this.tnt;
+/*     */   }
+/*     */   
+/*     */   public void setTnt(boolean tnt) {
+/* 558 */     this.tnt = tnt;
+/*     */   }
+/*     */   
+/*     */   public boolean addTnTBlock() {
+/* 562 */     if (this.placedTnT + 1 > 15) {
+/* 563 */       return false;
+/*     */     }
+/* 565 */     this.placedTnT++;
+/* 566 */     save();
+/* 567 */     return true;
+/*     */   }
+/*     */ 
+/*     */ 
+/*     */   
+/*     */   public int getPlacedTnT() {
+/* 573 */     return this.placedTnT;
+/*     */   }
+/*     */   
+/*     */   public void setPlacedTnT(int placedTnT) {
+/* 577 */     this.placedTnT = placedTnT;
+/*     */   }
+/*     */   
+/*     */   public void removeTnT() {
+/* 581 */     if (this.placedTnT > 0) {
+/* 582 */       this.placedTnT--;
+/* 583 */       save();
+/*     */     } 
+/*     */   }
+/*     */ 
+/*     */   
+/*     */   public void setWaterstate(Waterstate state) {
+/* 589 */     this.waterstate = state;
+/*     */   }
+/*     */   
+/*     */   public Waterstate getWaterstate() {
+/* 593 */     return this.waterstate;
+/*     */   }
+/*     */ }
+
+
+/* Location:              C:\Users\winte\OneDrive\Dokumente\Cloud\Plugins\Maker_Beta_02_1.jar!\de\doriansnowball\maker\objects\Map.class
+ * Java compiler version: 8 (52.0)
+ * JD-Core Version:       1.1.3
+ */
