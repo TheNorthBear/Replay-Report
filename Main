@@ -1,0 +1,423 @@
+/*     */ package de.doriansnowball.maker;
+/*     */ 
+/*     */ import de.doriansnowball.maker.enums.Endmodus;
+/*     */ import de.doriansnowball.maker.enums.Team;
+/*     */ import de.doriansnowball.maker.events.ClickListener;
+/*     */ import de.doriansnowball.maker.events.JoinListener;
+/*     */ import de.doriansnowball.maker.events.LobbyListener;
+/*     */ import de.doriansnowball.maker.events.NickListener;
+/*     */ import de.doriansnowball.maker.handler.BobHandler;
+/*     */ import de.doriansnowball.maker.handler.CommandHandler;
+/*     */ import de.doriansnowball.maker.handler.SetOrteHandler;
+/*     */ import de.doriansnowball.maker.objects.Game;
+/*     */ import de.doriansnowball.maker.objects.Ort;
+/*     */ import de.doriansnowball.maker.objects.Spieler;
+/*     */ import java.util.Collection;
+/*     */ import java.util.HashMap;
+/*     */ import java.util.Map;
+/*     */ import java.util.UUID;
+/*     */ import me.BukkitPVP.VIPHide.VIPHide;
+/*     */ import net.md_5.bungee.api.ChatColor;
+/*     */ import net.minecraft.server.v1_11_R1.IChatBaseComponent;
+/*     */ import net.minecraft.server.v1_11_R1.Packet;
+/*     */ import net.minecraft.server.v1_11_R1.PacketPlayOutChat;
+/*     */ import org.bukkit.Bukkit;
+/*     */ import org.bukkit.GameMode;
+/*     */ import org.bukkit.Location;
+/*     */ import org.bukkit.Material;
+/*     */ import org.bukkit.OfflinePlayer;
+/*     */ import org.bukkit.World;
+/*     */ import org.bukkit.boss.BarColor;
+/*     */ import org.bukkit.boss.BarStyle;
+/*     */ import org.bukkit.boss.BossBar;
+/*     */ import org.bukkit.command.CommandExecutor;
+/*     */ import org.bukkit.configuration.file.FileConfiguration;
+/*     */ import org.bukkit.configuration.serialization.ConfigurationSerialization;
+/*     */ import org.bukkit.craftbukkit.v1_11_R1.entity.CraftPlayer;
+/*     */ import org.bukkit.entity.Player;
+/*     */ import org.bukkit.event.Listener;
+/*     */ import org.bukkit.inventory.ItemStack;
+/*     */ import org.bukkit.inventory.meta.ItemMeta;
+/*     */ import org.bukkit.plugin.Plugin;
+/*     */ import org.bukkit.plugin.java.JavaPlugin;
+/*     */ import org.bukkit.potion.PotionEffect;
+/*     */ import org.bukkit.scoreboard.DisplaySlot;
+/*     */ import org.bukkit.scoreboard.Objective;
+/*     */ import org.bukkit.scoreboard.Scoreboard;
+/*     */ import org.bukkit.scoreboard.Team;
+/*     */ 
+/*     */ 
+/*     */ public class Main
+/*     */   extends JavaPlugin
+/*     */ {
+/*  53 */   public static String prefix = "§8[§e§lMAKER§8]§r ";
+/*     */   
+/*     */   public FileConfiguration config;
+/*  56 */   private HashMap<UUID, Spieler> allSpieler = new HashMap<>();
+/*  57 */   private static HashMap<Player, BossBar> map_PG = new HashMap<>();
+/*  58 */   private HashMap<Player, Scoreboard> boards = new HashMap<>();
+/*     */   
+/*  60 */   private VIPHide hide = null;
+/*     */   
+/*     */   public MapManager mm;
+/*     */   
+/*     */   public EditManager em;
+/*     */   
+/*     */   public GameManager gm;
+/*     */   
+/*     */   public CoinManager cm;
+/*     */   public BobHandler bh;
+/*     */   public World lobby;
+/*     */   
+/*     */   public void onEnable() {
+/*  73 */     Bukkit.getLogger().info("Aktiviere Maker...");
+/*  74 */     ConfigurationSerialization.registerClass(Ort.class);
+/*  75 */     this.config = getConfig();
+/*     */     
+/*  77 */     this.hide = (VIPHide)Bukkit.getPluginManager().getPlugin("VIPHide");
+/*     */     
+/*  79 */     this.mm = new MapManager(this);
+/*  80 */     this.em = new EditManager(this);
+/*  81 */     this.gm = new GameManager(this);
+/*  82 */     this.cm = new CoinManager(this);
+/*  83 */     this.bh = new BobHandler(this);
+/*  84 */     Bukkit.getPluginManager().registerEvents((Listener)new JoinListener(this), (Plugin)this);
+/*  85 */     Bukkit.getPluginManager().registerEvents((Listener)new LobbyListener(this), (Plugin)this);
+/*  86 */     Bukkit.getPluginManager().registerEvents((Listener)new ClickListener(this), (Plugin)this);
+/*  87 */     Bukkit.getPluginManager().registerEvents((Listener)new SetOrteHandler(this), (Plugin)this);
+/*  88 */     Bukkit.getPluginManager().registerEvents(this.em, (Plugin)this);
+/*  89 */     Bukkit.getPluginManager().registerEvents((Listener)this.bh, (Plugin)this);
+/*     */ 
+/*     */     
+/*  92 */     if (this.hide != null) {
+/*  93 */       Bukkit.getPluginManager().registerEvents((Listener)new NickListener(this), (Plugin)this.hide);
+/*     */     }
+/*     */     
+/*  96 */     CommandHandler ch = new CommandHandler(this);
+/*  97 */     getCommand("lobby").setExecutor((CommandExecutor)ch);
+/*  98 */     getCommand("setLobbySpawn").setExecutor((CommandExecutor)ch);
+/*  99 */     getCommand("fuu").setExecutor(new TestingCommand(this));
+/* 100 */     getCommand("coins").setExecutor((CommandExecutor)ch);
+/* 101 */     getCommand("start").setExecutor((CommandExecutor)ch);
+/* 102 */     getCommand("invite").setExecutor((CommandExecutor)ch);
+/* 103 */     getCommand("accept").setExecutor((CommandExecutor)ch);
+/* 104 */     getCommand("bob").setExecutor((CommandExecutor)ch);
+/*     */     
+/* 106 */     this.lobby = ((Location)this.config.get("Lobby.Spawn")).getWorld();
+/*     */     
+/* 108 */     for (Player p : Bukkit.getOnlinePlayers()) {
+/* 109 */       joinLobby(getSpieler((OfflinePlayer)p));
+/*     */     }
+/* 111 */     Bukkit.getLogger().info("Maker erfolgreich aktiviert");
+/*     */   }
+/*     */ 
+/*     */ 
+/*     */   
+/*     */   public void onDisable() {
+/* 117 */     for (Player p : map_PG.keySet()) {
+/* 118 */       hideActiveBossBar(p);
+/*     */     }
+/* 120 */     for (Game g : this.gm.games.values()) {
+/* 121 */       for (Player p : g.getPlayers())
+/* 122 */         p.teleport((Location)this.config.get("Lobby.Spawn")); 
+/*     */     } 
+/* 124 */     for (Game g : this.gm.folders.keySet())
+/*     */     {
+/* 126 */       this.gm.cleanUpGameWorld(g);
+/*     */     }
+/* 128 */     this.mm.saveAllMaps();
+/*     */   }
+/*     */   
+/*     */   public Spieler getSpieler(UUID uuid) {
+/* 132 */     if (this.allSpieler.containsKey(uuid)) {
+/* 133 */       return this.allSpieler.get(uuid);
+/*     */     }
+/* 135 */     Spieler s = new Spieler((OfflinePlayer)Bukkit.getPlayer(uuid));
+/* 136 */     this.allSpieler.put(uuid, s);
+/* 137 */     return s;
+/*     */   }
+/*     */ 
+/*     */   
+/*     */   public Spieler getSpieler(OfflinePlayer p) {
+/* 142 */     return getSpieler(p.getUniqueId());
+/*     */   }
+/*     */   
+/*     */   public void removePlayer(UUID uuid) {
+/* 146 */     if (this.allSpieler.containsKey(uuid)) {
+/* 147 */       this.allSpieler.remove(uuid);
+/*     */     }
+/*     */   }
+/*     */   
+/*     */   public void removePlayer(Player player) {
+/* 152 */     removePlayer(player.getUniqueId());
+/*     */   }
+/*     */   
+/*     */   public Collection<Spieler> getAllSpieler() {
+/* 156 */     return this.allSpieler.values();
+/*     */   }
+/*     */   
+/*     */   public static void sendActionbar(Player p, String msg) {
+/* 160 */     IChatBaseComponent cbc = IChatBaseComponent.ChatSerializer.a("{\"text\": \"" + msg + "\"}");
+/* 161 */     PacketPlayOutChat ppoc = new PacketPlayOutChat(cbc, (byte)2);
+/* 162 */     (((CraftPlayer)p).getHandle()).playerConnection.sendPacket((Packet)ppoc);
+/*     */   }
+/*     */   
+/*     */   public void sendBossbar(Player p, String msg, BarColor color) {
+/* 166 */     if (map_PG.containsKey(p)) {
+/* 167 */       hideActiveBossBar(p);
+/*     */     }
+/* 169 */     BossBar bar = Bukkit.createBossBar(msg, color, BarStyle.SOLID, new org.bukkit.boss.BarFlag[0]);
+/* 170 */     bar.addPlayer(p);
+/* 171 */     bar.setVisible(true);
+/* 172 */     map_PG.put(p, bar);
+/*     */   }
+/*     */   
+/*     */   public static void sendBossbar(Player p, String msg, BarColor color, double progress) {
+/*     */     BossBar bar;
+/* 177 */     if (map_PG.containsKey(p)) {
+/* 178 */       bar = map_PG.get(p);
+/* 179 */       bar.setTitle(msg);
+/*     */     } else {
+/* 181 */       bar = Bukkit.createBossBar(msg, color, BarStyle.SEGMENTED_20, new org.bukkit.boss.BarFlag[0]);
+/*     */     } 
+/* 183 */     bar.setProgress(progress);
+/* 184 */     bar.addPlayer(p);
+/* 185 */     bar.setVisible(true);
+/* 186 */     map_PG.put(p, bar);
+/*     */   }
+/*     */   
+/*     */   public void hideActiveBossBar(Player p) {
+/* 190 */     if (map_PG.containsKey(p))
+/* 191 */       ((BossBar)map_PG.get(p)).removePlayer(p); 
+/*     */   }
+/*     */   
+/*     */   public static String toString(Location l) {
+/* 195 */     return new String(l.getX() + "," + l.getY() + "," + l.getZ() + "," + l.getYaw() + "," + l.getPitch() + "," + l.getWorld().getName());
+/*     */   }
+/*     */   
+/*     */   public static Location toLocation(String s) {
+/* 199 */     String[] a = s.split(",");
+/* 200 */     World w = Bukkit.getWorld(a[5]);
+/* 201 */     if (w == null) {
+/* 202 */       w = Bukkit.getWorlds().get(0);
+/*     */     }
+/* 204 */     float x = Float.parseFloat(a[0]);
+/* 205 */     float y = Float.parseFloat(a[1]);
+/* 206 */     float z = Float.parseFloat(a[2]);
+/* 207 */     float ya = Float.parseFloat(a[3]);
+/* 208 */     float pi = Float.parseFloat(a[4]);
+/* 209 */     Location l = new Location(w, x, y, z, ya, pi);
+/* 210 */     return l;
+/*     */   }
+/*     */   
+/*     */   public void joinLobby(Spieler s, boolean teleport) {
+/* 214 */     Player p = Bukkit.getPlayer(s.getPlayer().getUniqueId());
+/* 215 */     s.setDead(false);
+/* 216 */     s.setArena(null);
+/* 217 */     s.setBauen(false);
+/* 218 */     s.setIngame(false);
+/* 219 */     s.setTeam(Team.KEIN);
+/* 220 */     for (Player all : Bukkit.getOnlinePlayers()) {
+/* 221 */       p.showPlayer(all);
+/*     */     }
+/*     */     
+/* 224 */     p.setPlayerListName(getNameWithPrefix(p));
+/* 225 */     p.setGameMode(GameMode.ADVENTURE);
+/* 226 */     p.setHealth(20.0D);
+/* 227 */     p.setAllowFlight(false);
+/* 228 */     for (PotionEffect effect : p.getActivePotionEffects()) {
+/* 229 */       p.removePotionEffect(effect.getType());
+/*     */     }
+/* 231 */     p.resetPlayerTime();
+/* 232 */     p.resetPlayerWeather();
+/* 233 */     p.setFireTicks(0);
+/* 234 */     hideActiveBossBar(p);
+/* 235 */     if (teleport) {
+/* 236 */       Location loc = (Location)this.config.get("Lobby.Spawn");
+/* 237 */       p.teleport(loc);
+/*     */     } 
+/* 239 */     joinScoreboardTeam(p);
+/* 240 */     setLobbyScoreboard(p);
+/* 241 */     giveLobbyInv(p);
+/*     */   }
+/*     */ 
+/*     */   
+/*     */   public void joinLobby(Spieler s) {
+/* 246 */     joinLobby(s, true);
+/*     */   }
+/*     */   
+/*     */   public void setLobbyScoreboard(Player p) {
+/*     */     Scoreboard board;
+/* 251 */     if (!this.boards.containsKey(p)) {
+/* 252 */       board = getServer().getScoreboardManager().getNewScoreboard();
+/* 253 */       createScoreboardTeams(board);
+/*     */     } else {
+/* 255 */       board = this.boards.get(p);
+/*     */     } 
+/*     */     
+/* 258 */     if (board.getObjective("lobby") != null) {
+/* 259 */       board.getObjective("lobby").unregister();
+/*     */     }
+/*     */     
+/* 262 */     Objective obj = board.registerNewObjective("lobby", "dummy");
+/* 263 */     obj.setDisplaySlot(DisplaySlot.SIDEBAR);
+/* 264 */     obj.setDisplayName(ChatColor.DARK_GRAY + "[" + ChatColor.YELLOW + ChatColor.BOLD + "MAKER" + ChatColor.DARK_GRAY + "]");
+/* 265 */     obj.getScore(" ").setScore(3);
+/* 266 */     obj.getScore(ChatColor.GRAY + "Coins:").setScore(2);
+/* 267 */     obj.getScore(ChatColor.GOLD + "> " + this.cm.getCoins(p)).setScore(1);
+/* 268 */     this.boards.put(p, board);
+/* 269 */     p.setScoreboard(board);
+/*     */   }
+/*     */   
+/*     */   public void giveLobbyInv(Player p) {
+/* 273 */     ItemStack chest = new ItemStack(Material.CHEST);
+/* 274 */     ItemMeta chestm = chest.getItemMeta();
+/* 275 */     chestm.setDisplayName("§aSpielmodus betreten");
+/* 276 */     chest.setItemMeta(chestm);
+/*     */     
+/* 278 */     ItemStack red = new ItemStack(Material.REDSTONE);
+/* 279 */     ItemMeta redm = red.getItemMeta();
+/* 280 */     redm.setDisplayName("§cSpielmodus erstellen");
+/* 281 */     red.setItemMeta(redm);
+/*     */     
+/* 283 */     ItemStack craft = new ItemStack(Material.WORKBENCH);
+/* 284 */     ItemMeta craftm = craft.getItemMeta();
+/* 285 */     craftm.setDisplayName("§aSpielmodi bearbeiten");
+/* 286 */     craft.setItemMeta(craftm);
+/*     */     
+/* 288 */     p.getInventory().clear();
+/*     */ 
+/*     */     
+/* 291 */     p.getInventory().setItem(0, createItemWithDisplayName(Material.CHEST, "§aSpielmodus betreten"));
+/* 292 */     p.getInventory().setItem(4, createItemWithDisplayName(Material.REDSTONE, "§cSpielmodus erstellen"));
+/* 293 */     p.getInventory().setItem(8, createItemWithDisplayName(Material.WORKBENCH, "§aSpielmodus bearbeiten"));
+/*     */ 
+/*     */     
+/* 296 */     p.getInventory().setItem(18, createItemWithDisplayName(Material.BANNER, Endmodus.ZIEL.getDisplayname()));
+/* 297 */     p.getInventory().setItem(19, createItemWithDisplayName(Material.EMERALD, Endmodus.CAPTURE_THE_ITEM.getDisplayname()));
+/* 298 */     p.getInventory().setItem(20, createItemWithDisplayName(Material.TNT, Endmodus.ZERSTOERUNG_SOFORT.getDisplayname()));
+/* 299 */     p.getInventory().setItem(21, createItemWithDisplayName(Material.TOTEM, Endmodus.ZERSTOERUNG_NORESPAWN.getDisplayname()));
+/* 300 */     p.getInventory().setItem(22, createItemWithDisplayName(Material.SKULL_ITEM, Endmodus.LAST_MAN_STANDING.getDisplayname()));
+/*     */     
+/* 302 */     this.bh.setToggleItems(p);
+/*     */   }
+/*     */   
+/*     */   public String getDisplayName(Player p) {
+/* 306 */     if (this.hide != null) {
+/* 307 */       return this.hide.getName(p);
+/*     */     }
+/* 309 */     return p.getName();
+/*     */   }
+/*     */ 
+/*     */ 
+/*     */   
+/*     */   public ItemStack createItemWithDisplayName(Material material, String displayname) {
+/* 315 */     ItemStack item = new ItemStack(material);
+/* 316 */     ItemMeta itemMeta = item.getItemMeta();
+/* 317 */     itemMeta.setDisplayName(displayname);
+/* 318 */     item.setItemMeta(itemMeta);
+/* 319 */     return item;
+/*     */   }
+/*     */   
+/*     */   public String getNameWithPrefix(Player p) {
+/* 323 */     return getPrefix(p) + getDisplayName(p);
+/*     */   }
+/*     */   
+/*     */   public String getPrefix(Player p) {
+/* 327 */     String prefix = "§7";
+/* 328 */     if (getSpieler((OfflinePlayer)p).isIngame()) {
+/* 329 */       return getSpieler((OfflinePlayer)p).getTeam().getChatColor().toString();
+/*     */     }
+/* 331 */     if (this.hide != null && this.hide.isDisguised(p)) {
+/* 332 */       return "§6";
+/*     */     }
+/* 334 */     if (p.hasPermission("prefix.owner") || p.hasPermission("prefix.admin")) {
+/* 335 */       prefix = "§4Admin§8│ §4";
+/* 336 */     } else if (p.hasPermission("prefix.mod")) {
+/* 337 */       prefix = "§cMod§8│ §c";
+/* 338 */     } else if (p.hasPermission("prefix.teamleiter")) {
+/* 339 */       prefix = "§cTeamleiter§8│ §c";
+/* 340 */     } else if (p.hasPermission("prefix.supporter")) {
+/* 341 */       prefix = "§9Supporter§8│ §9";
+/* 342 */     } else if (p.hasPermission("prefix.youtuber")) {
+/* 343 */       prefix = "§5";
+/* 344 */     } else if (p.hasPermission("prefix.emerald")) {
+/* 345 */       prefix = "§2";
+/* 346 */     } else if (p.hasPermission("prefix.premiumplus")) {
+/* 347 */       prefix = "§e";
+/* 348 */     } else if (p.hasPermission("prefix.premium")) {
+/* 349 */       prefix = "§6";
+/*     */     } 
+/* 351 */     return prefix;
+/*     */   }
+/*     */ 
+/*     */ 
+/*     */ 
+/*     */   
+/*     */   public void joinScoreboardTeam(Player p) {
+/* 358 */     if (this.hide != null && this.hide.isDisguised(p)) {
+/* 359 */       joinAllScoreboards(p, "premium");
+/*     */     }
+/* 361 */     if (p.hasPermission("prefix.owner") || p.hasPermission("prefix.admin")) {
+/* 362 */       joinAllScoreboards(p, "admin");
+/* 363 */     } else if (p.hasPermission("prefix.mod")) {
+/* 364 */       joinAllScoreboards(p, "mod");
+/* 365 */     } else if (p.hasPermission("prefix.teamleiter")) {
+/* 366 */       joinAllScoreboards(p, "teamleiter");
+/* 367 */     } else if (p.hasPermission("prefix.supporter")) {
+/* 368 */       joinAllScoreboards(p, "supporter");
+/* 369 */     } else if (p.hasPermission("prefix.youtuber")) {
+/* 370 */       joinAllScoreboards(p, "youtuber");
+/* 371 */     } else if (p.hasPermission("prefix.emerald")) {
+/* 372 */       joinAllScoreboards(p, "emerald");
+/* 373 */     } else if (p.hasPermission("prefix.premiumplus")) {
+/* 374 */       joinAllScoreboards(p, "premiumplus");
+/* 375 */     } else if (p.hasPermission("prefix.premium")) {
+/* 376 */       joinAllScoreboards(p, "premium");
+/*     */     } else {
+/* 378 */       joinAllScoreboards(p, "normal");
+/*     */     } 
+/*     */   }
+/*     */ 
+/*     */   
+/*     */   private void joinAllScoreboards(Player p, String team) {
+/* 384 */     for (Map.Entry<Player, Scoreboard> entry : this.boards.entrySet()) {
+/* 385 */       ((Scoreboard)entry.getValue()).getTeam(team).addPlayer((OfflinePlayer)p);
+/*     */     }
+/*     */   }
+/*     */   
+/*     */   public void createScoreboardTeams(Scoreboard board) {
+/* 390 */     Team admin = board.registerNewTeam("admin");
+/* 391 */     admin.setPrefix("§4");
+/*     */     
+/* 393 */     Team mod = board.registerNewTeam("mod");
+/* 394 */     mod.setPrefix("§c");
+/*     */     
+/* 396 */     Team teamleiter = board.registerNewTeam("teamleiter");
+/* 397 */     teamleiter.setPrefix("§c");
+/*     */     
+/* 399 */     Team supporter = board.registerNewTeam("supporter");
+/* 400 */     supporter.setPrefix("9");
+/*     */     
+/* 402 */     Team youtuber = board.registerNewTeam("youtuber");
+/* 403 */     youtuber.setPrefix("§5");
+/*     */     
+/* 405 */     Team emerald = board.registerNewTeam("emerald");
+/* 406 */     emerald.setPrefix("§2");
+/*     */     
+/* 408 */     Team premiumplus = board.registerNewTeam("premiumplus");
+/* 409 */     premiumplus.setPrefix("§e");
+/*     */     
+/* 411 */     Team premium = board.registerNewTeam("premium");
+/* 412 */     premium.setPrefix("§6");
+/*     */     
+/* 414 */     Team normal = board.registerNewTeam("normal");
+/* 415 */     normal.setPrefix("§7");
+/*     */   }
+/*     */ }
+
+
+/* Location:              C:\Users\winte\OneDrive\Dokumente\Cloud\Plugins\Maker_Beta_02_1.jar!\de\doriansnowball\maker\Main.class
+ * Java compiler version: 8 (52.0)
+ * JD-Core Version:       1.1.3
+ */
